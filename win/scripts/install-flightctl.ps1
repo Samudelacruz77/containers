@@ -49,6 +49,8 @@ Assert-Admin
 
 $candidatePaths = @(
     $ZipPath,
+    "C:\Users\vagrant\binary\flightctl.zip",
+    "C:\Users\vagrant\flightctl.zip",
     "C:\host_home\flightctl.zip",
     "C:\vagrant\flightctl.zip",
     "$env:USERPROFILE\Downloads\flightctl.zip"

@@ -206,5 +206,28 @@ if [ -n "${WIN10_IP:-}" ]; then
   echo "rsync /home/user -> win10:C:\\Users\\Vagrant"
   rsync_to_vm "${WIN10_IP}"
 fi
+
+# Start vagrant rsync-auto in the background with password automation
+if command -v expect >/dev/null 2>&1; then
+  echo "starting vagrant rsync-auto in background"
+  cd /home/user
+  (
+    expect <<'EOF'
+spawn vagrant rsync-auto
+expect {
+  "password:" {
+    send "vagrant\r"
+    exp_continue
+  }
+  eof
+}
+EOF
+  ) &
+  RSYNC_AUTO_PID=$!
+  echo "vagrant rsync-auto started in background (PID: $RSYNC_AUTO_PID)"
+else
+  echo "warning: expect not found, skipping vagrant rsync-auto. Install 'expect' package to enable auto-sync."
+fi
+
 # Try to resolve the libvirt domain name and guest IP for the Vagrant box
 exec "$@"

@@ -80,13 +80,26 @@ What it does:
 - 🚌 Starts D-Bus and libvirtd, ensures default libvirt network is active
 - 🔐 Configures libvirt default NAT networking; SPICE graphics is enabled
 - 🧪 Boots the Windows 11 Vagrant box under libvirt
-- 🔁 Sets up rsync of `/home/user` to `C:\Users\Vagrant`
+- 🔁 Sets up rsync of `/home/user` to `C:\Users\Vagrant` and starts `vagrant rsync-auto` in the background
 
 ### Connect via SPICE 🖥️
 
-- With host networking: `remote-viewer spice://127.0.0.1:5930`
-- With bridge networking: publish `-p 5930:5930` and run container with `-e SPICE_LISTEN=0.0.0.0`, then `remote-viewer spice://127.0.0.1:5930`
-- Tip: Install SPICE guest tools in Windows for better display/clipboard
+**Network topology**: Laptop (host) → Fedora container → Windows Vagrant box (VM)
+
+The SPICE connection flows from your laptop through the container to the Windows VM:
+
+- **With host networking** (`--network=host`):
+  - SPICE is accessible directly from your laptop
+  - Run from your laptop: `remote-viewer spice://127.0.0.1:5930`
+  - The container's network is the host network, so port 5930 is directly accessible
+
+- **With bridge networking** (`--network bridge`):
+  - Publish the SPICE port: `-p 5930:5930`
+  - Set SPICE to listen on all interfaces: `-e SPICE_LISTEN=0.0.0.0`
+  - Run from your laptop: `remote-viewer spice://127.0.0.1:5930`
+  - The port forwarding chain: laptop:5930 → container:5930 → VM:5930
+
+**Tip**: Install SPICE guest tools in Windows for better display/clipboard sharing.
 
 ### Troubleshooting 🛠️
 

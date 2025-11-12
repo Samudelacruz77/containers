@@ -18,7 +18,7 @@ Vagrant.configure("2") do |config|
     win11.vm.box = "oopsme/windows11-22h2"
     win11.vm.box_version = "11-22h2-uefi"
     win11.vm.hostname = "win11"
-    win11.vm.synced_folder "/home/user", "C:\\Users\\Vagrant",
+    win11.vm.synced_folder "/home/user", "C:\\Users\\vagrant",
       type: "rsync",
       rsync__exclude: [
         "AppData/**",

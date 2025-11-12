@@ -1,6 +1,6 @@
 FROM quay.io/fedora/fedora-bootc:43
 RUN dnf update -y  
-RUN dnf install -y yum-utils qemu-kvm libvirt-daemon-common libvirt-daemon-driver-network libvirt-daemon-driver-qemu libvirt-daemon-kvm libvirt-daemon-driver-storage-disk libvirt-daemon-driver-storage-logical bridge-utils libvirt-devel kernel-core curl net-tools jq dbus dbus-daemon make gcc edk2-ovmf initscripts openssh-clients sshpass rsync ruby-devel dnsmasq firewalld dmidecode vagrant && \
+RUN dnf install -y yum-utils qemu-kvm libvirt-daemon-common libvirt-daemon-driver-network libvirt-daemon-driver-qemu libvirt-daemon-kvm libvirt-daemon-driver-storage-disk libvirt-daemon-driver-storage-logical bridge-utils libvirt-devel kernel-core curl net-tools jq dbus dbus-daemon make gcc edk2-ovmf initscripts openssh-clients sshpass rsync ruby-devel dnsmasq firewalld dmidecode vagrant expect && \
   dnf clean all -y
 RUN useradd -ms /bin/bash user && \
   echo "user:user" | chpasswd && \
