@@ -82,6 +82,25 @@ What it does:
 | KVM: permission denied / not present | `/dev/kvm` not available or not passed | Run container with `--device=/dev/kvm`; ensure user in `kvm` | `ls -l /dev/kvm`; `id` shows `kvm` group |
 | Network 'default' is not active | Libvirt default network down | `virsh net-define` (if needed) and `virsh net-start default` | `virsh net-list --all` shows `default active` |
 
+### Constraints and assumptions ⚠️
+
+- Linux host only; tested on Fedora 43+ (not validated on macOS or Windows).
+- Requires hardware virtualization (VT-x/AMD-V) and host `/dev/kvm` access.
+- Container must run privileged with host cgroups and devices:
+  - `--privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw`
+  - Devices: `--device=/dev/kvm --device=/dev/net/tun --device=/dev/vhost-net`
+  - Caps: `--cap-add=NET_ADMIN --cap-add=SYS_ADMIN`
+- Verify RW cgroup mount inside the container:
+  ```bash
+  mount | grep ' /sys/fs/cgroup ' || true
+  [ -w /sys/fs/cgroup ] && echo "OK: /sys/fs/cgroup is writable" || echo "ERROR: /sys/fs/cgroup is not writable"
+  ```
+- Networking assumes libvirt default NAT network; host networking is recommended for simplicity.
+- Rootless mode is not supported (no TAP/bridge, limited cgroups/devices).
+- UEFI firmware required on host: `edk2-ovmf` provides `OVMF_CODE*` and `OVMF_VARS*`.
+- SELinux/AppArmor may require permissive policies or proper labeling; seccomp is set to unconfined in run examples.
+- Windows rsync excludes are applied to avoid locked profile files; large syncs may be slow.
+
 ## Run all Flightctl VMs with make-vm.sh ✈️
 
 The `make-vm.sh` script builds a bootable image per release directory (e.g., `centos9`, `rhel96`, `rhel96_fips`) and then creates/boots a libvirt VM.
@@ -138,9 +157,9 @@ Notes:
 ## TODO ✅
 
 - Validate container flow on RHEL, Fedora Silverblue, and Ubuntu hosts.
-- Rootless mode: investigate libvirt-in-container feasibility without `--privileged`.
 - Replace iptables with firewalld/nftables-aware rules where available.
 - Improve Windows rsync: switch to push-on-change or periodic sync; exclude more locked paths.
+- Add more poweshell scripts that execute flightctl binary commands and return a report of passed and failed
 - Optional SMB path (documented) for non-RDP workflows.
 - Parameterize CPU/RAM and RDP ports via env vars in `startup.sh`.
 - Add cleanup script to remove VMs, networks, and temporary NVRAM files.
