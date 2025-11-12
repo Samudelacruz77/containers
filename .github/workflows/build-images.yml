@@ -13,6 +13,15 @@ jobs:
       fail-fast: false
       matrix:
         image:
+          - name: centos9
+            context: centos9
+            file: centos9/Containerfile
+          - name: rhel96
+            context: rhel96
+            file: rhel96/Containerfile
+          - name: rhel96_fips
+            context: rhel96_fips
+            file: rhel96_fips/Containerfile
           - name: win
             context: win
             file: win/Containerfile
@@ -23,7 +32,16 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Login to Red Hat Container Registry
+        if: (matrix.image.name == 'rhel96' || matrix.image.name == 'rhel96_fips') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork != true)
+        uses: docker/login-action@v3
+        with:
+          registry: registry.redhat.io
+          username: ${{ secrets.REDHAT_REGISTRY_USERNAME }}
+          password: ${{ secrets.REDHAT_REGISTRY_PASSWORD }}
+
       - name: Build ${{ matrix.image.name }}
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork != true || (matrix.image.name != 'rhel96' && matrix.image.name != 'rhel96_fips')
         uses: docker/build-push-action@v5
         with:
           context: ./${{ matrix.image.context }}
@@ -33,6 +51,11 @@ jobs:
           tags: local/${{ matrix.image.name }}:ci
 
       - name: Show build result
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork != true || (matrix.image.name != 'rhel96' && matrix.image.name != 'rhel96_fips')
         run: echo "Built ${{ matrix.image.name }} successfully"
+
+      - name: Skip RHEL build (fork PR)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true && (matrix.image.name == 'rhel96' || matrix.image.name == 'rhel96_fips')
+        run: echo "Skipping ${{ matrix.image.name }} build for PR from fork (secrets not available)"
 
 

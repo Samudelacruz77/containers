@@ -4,24 +4,24 @@ ADD etc etc
 RUN dnf -y copr enable @redhat-et/flightctl centos-stream-9-x86_64
 
 RUN dnf -y install flightctl-agent && \
-    dnf -y clean all && \
-    systemctl enable flightctl-agent.service
+  dnf -y clean all && \
+  systemctl enable flightctl-agent.service
 
 RUN useradd -ms /bin/bash user && \
-        echo "user:user" | chpasswd && \
-        echo "user ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && \
-        echo "10.46.46.95 agent-api.flightctl.apps.ocp-edge-cluster-0.qe.lab.redhat.com e2eregistry.apps.ocp-edge-cluster-0.qe.lab.redhat.com" > /etc/hosts
+  echo "user:user" | chpasswd && \
+  echo "user ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && \
+  echo "10.46.46.95 agent-api.flightctl.apps.ocp-edge-cluster-0.qe.lab.redhat.com e2eregistry.apps.ocp-edge-cluster-0.qe.lab.redhat.com" > /etc/hosts
 # Add cloud-init and open-vm-tools
 RUN dnf -y install cloud-init open-vm-tools && \
-    ln -s ../cloud-init.target /usr/lib/systemd/system/default.target.wants && \
-    rm -rf /var/{cache,log} /var/lib/{dnf,rhsm} && \
-    systemctl enable vmtoolsd.service
+  ln -s ../cloud-init.target /usr/lib/systemd/system/default.target.wants && \
+  rm -rf /var/{cache,log} /var/lib/{dnf,rhsm} && \
+  systemctl enable vmtoolsd.service
 
 # Optional: To enable podman-compose application support, uncomment below
- RUN dnf -y install epel-release && \
-     dnf -y install podman-compose && \
-     dnf -y clean all && \
-     systemctl enable podman.service
+RUN dnf -y install epel-release && \
+  dnf -y install podman-compose && \
+  dnf -y clean all && \
+  systemctl enable podman.service
 
 ADD test-podman-compose-sleep.yaml /usr/local/etc/compose/manifests/embedded-demo-app/podman-compose.yaml
 
@@ -30,9 +30,9 @@ ADD config.yaml /etc/flightctl/
 WORKDIR /
 
 LABEL app="sleep" \
-      appType="compose" \
-      version="v2" \
-      description="Sleep demo upgraded" \
-      maintainer-name="John Doe" \
-      maintainer-email="john@doe.com" \
-      change-log="Version v2: Upgraded base image and added utilities."
+  appType="compose" \
+  version="v2" \
+  description="Sleep demo upgraded" \
+  maintainer-name="John Doe" \
+  maintainer-email="john@doe.com" \
+  change-log="Version v2: Upgraded base image and added utilities."
