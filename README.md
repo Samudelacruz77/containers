@@ -208,6 +208,109 @@ The generated qcow2 images are ready to boot in VMs and include:
 - All installed packages and configurations
 - Flightctl agent (if included in the container image)
 
+## Publish images to quay.io 📤
+
+After building container images, you can publish them to quay.io for distribution and reuse.
+
+### Prerequisites
+
+- 🐋 Podman installed and configured
+- 🔐 quay.io account with access to the target repository
+- 🔑 quay.io authentication token (or logged in via `podman login`)
+
+### Manual publishing
+
+1. **Login to quay.io**:
+
+```bash
+podman login quay.io
+# Enter your quay.io username and password/token when prompted
+```
+
+Alternatively, use a token:
+
+```bash
+echo "YOUR_QUAY_TOKEN" | podman login quay.io --username YOUR_USERNAME --password-stdin
+```
+
+2. **Build and tag the image** with your quay.io repository:
+
+```bash
+# For Windows container
+cd win
+podman build -t quay.io/YOUR_USERNAME/your-image-win:v1 .
+
+# For Linux containers (example: centos9)
+cd centos9
+podman build -t quay.io/YOUR_USERNAME/your-image-centos9:v1 .
+```
+
+3. **Push the image** to quay.io:
+
+```bash
+# Push Windows image
+podman push quay.io/YOUR_USERNAME/your-image-win:v1
+
+# Push Linux image
+podman push quay.io/YOUR_USERNAME/your-image-centos9:v1
+```
+
+### Publishing multiple images
+
+To publish all images at once:
+
+```bash
+# Set your quay.io username
+QUAY_USER="your-username"
+VERSION="v1"
+
+# Build and push each image
+for dir in centos9 rhel96 rhel96_fips win; do
+  cd "$dir"
+  IMAGE_NAME="your-image-${dir}"
+  podman build -t "quay.io/${QUAY_USER}/${IMAGE_NAME}:${VERSION}" .
+  podman push "quay.io/${QUAY_USER}/${IMAGE_NAME}:${VERSION}"
+  cd ..
+done
+```
+
+### Tagging strategies
+
+Common tagging approaches:
+
+- **Version tags**: `v1`, `v1.0.0`, `latest`
+- **Branch-based**: `main`, `develop`
+- **Commit-based**: Use short commit SHA: `git rev-parse --short HEAD`
+
+Example with multiple tags:
+
+```bash
+VERSION="v1.0.0"
+COMMIT=$(git rev-parse --short HEAD)
+IMAGE="quay.io/YOUR_USERNAME/your-image-centos9"
+
+podman build -t "${IMAGE}:${VERSION}" \
+             -t "${IMAGE}:${COMMIT}" \
+             -t "${IMAGE}:latest" \
+             centos9
+
+podman push "${IMAGE}:${VERSION}"
+podman push "${IMAGE}:${COMMIT}"
+podman push "${IMAGE}:latest"
+```
+
+### Using published images
+
+Once published, others can pull and use your images:
+
+```bash
+# Pull the image
+podman pull quay.io/YOUR_USERNAME/your-image-win:v1
+
+# Use in make-vm.sh or other scripts
+# Update the OCI_IMAGE_REPO variable to point to your published image
+```
+
 ## Run all Flightctl VMs with make-vm.sh ✈️
 
 The `make-vm.sh` script builds a bootable image per release directory (e.g., `centos9`, `rhel96`, `rhel96_fips`) and then creates/boots a libvirt VM.
