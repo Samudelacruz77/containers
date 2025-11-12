@@ -128,6 +128,86 @@ What it does:
 - SELinux/AppArmor may require permissive policies or proper labeling; seccomp is set to unconfined in run examples.
 - Windows rsync excludes are applied to avoid locked profile files; large syncs may be slow.
 
+## Generate qcow2 images from container images 🖼️
+
+This repository contains bootc-based container images that can be converted to qcow2 disk images for use with libvirt, QEMU, or other virtualization platforms.
+
+### Prerequisites
+
+- 🐋 Podman (for building and running containers)
+- 🧱 bootc-image-builder (available as a container image)
+- 💾 Sufficient disk space (each qcow2 image is several GB)
+
+### Automated generation (via make-vm.sh)
+
+The `make-vm.sh` script automates the entire process including qcow2 generation. See the [Run all Flightctl VMs](#run-all-flightctl-vms-with-make-vmsh-) section below.
+
+### Manual qcow2 generation
+
+To generate a qcow2 image manually from a container image:
+
+1. **Build the container image** from a release directory:
+
+```bash
+cd centos9  # or rhel96, rhel96_fips
+podman build -t quay.io/sdelacru/centos9:v1 .
+```
+
+2. **Generate the qcow2 image** using bootc-image-builder:
+
+```bash
+mkdir -p output
+sudo podman run --rm -it --privileged --pull=newer \
+    --security-opt label=type:unconfined_t \
+    -v "${PWD}/output":/output \
+    -v /var/lib/containers/storage:/var/lib/containers/storage \
+    quay.io/centos-bootc/bootc-image-builder:latest \
+    --type qcow2 \
+    quay.io/sdelacru/centos9:v1
+```
+
+The qcow2 image will be available at `output/qcow2/disk.qcow2`.
+
+**Note for Fedora bootc-based images**: When building Fedora bootc images, pass `--rootfs btrfs` to avoid rootless rootfs errors:
+
+```bash
+sudo podman run --rm -it --privileged --pull=newer \
+    --security-opt label=type:unconfined_t \
+    -v "${PWD}/output":/output \
+    -v /var/lib/containers/storage:/var/lib/containers/storage \
+    quay.io/centos-bootc/bootc-image-builder:latest \
+    --type qcow2 \
+    --rootfs btrfs \
+    <your-image-ref>
+```
+
+3. **Use the qcow2 image** with libvirt or QEMU:
+
+```bash
+# Copy to libvirt images directory
+sudo cp output/qcow2/disk.qcow2 /var/lib/libvirt/images/my-vm.qcow2
+
+# Optionally resize the disk
+sudo qemu-img resize /var/lib/libvirt/images/my-vm.qcow2 +20G
+
+# Set proper ownership
+sudo chown libvirt:libvirt /var/lib/libvirt/images/my-vm.qcow2
+```
+
+### What bootc-image-builder does
+
+The `bootc-image-builder` container:
+- Takes a bootc-based container image as input
+- Extracts the filesystem and boot configuration
+- Creates a bootable disk image in the specified format (qcow2, raw, etc.)
+- Outputs the image to the mounted `/output` directory
+
+The generated qcow2 images are ready to boot in VMs and include:
+- The complete filesystem from the container image
+- Boot configuration (GRUB, systemd-boot, etc.)
+- All installed packages and configurations
+- Flightctl agent (if included in the container image)
+
 ## Run all Flightctl VMs with make-vm.sh ✈️
 
 The `make-vm.sh` script builds a bootable image per release directory (e.g., `centos9`, `rhel96`, `rhel96_fips`) and then creates/boots a libvirt VM.
