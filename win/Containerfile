@@ -11,6 +11,7 @@ RUN dnf remove -y vagrant-libvirt vagrant-vbguest vagrant-winrm vagrant-winrm-el
 COPY startup.sh /home/user/startup.sh
 COPY Vagrantfile /home/user/Vagrantfile
 COPY scripts /home/user/scripts
+COPY binary /home/user/binary 
 USER user
 WORKDIR /home/user
 # Pre-fetch Vagrant boxes to speed up container startup
