@@ -1,0 +1,83 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  # Ensure the vagrant-sshfs plugin is present (Containerfile installs it already)
+  config.vagrant.plugins = ["vagrant-libvirt", "winrm", "winrm-elevated"]
+  # WinRM reliability/tuning
+  config.winrm.username = "vagrant"
+  config.winrm.password = "vagrant"
+  config.winrm.transport = :negotiate
+  config.winrm.basic_auth_only = false
+  config.winrm.retry_limit = 30
+  config.winrm.retry_delay = 10
+  config.winrm.timeout = 600
+  # Disable default synced folder to avoid NFS on Windows guests
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+  config.vm.define "win11", primary: true do |win11|
+    win11.vm.box = "oopsme/windows11-22h2"
+    win11.vm.box_version = "11-22h2-uefi"
+    win11.vm.hostname = "win11"
+    win11.vm.synced_folder "/home/user", "C:\\Users\\Vagrant",
+      type: "rsync",
+      rsync__exclude: [
+        "AppData/**",
+        "NTUSER.DAT*",
+        "ntuser.dat*",
+        "UsrClass.dat*",
+        "NTUSER.*",
+        "Recent/**",
+        "Temp/**"
+      ]
+    # RDP: forward host port 53389 -> guest 3389
+    win11.vm.network "forwarded_port", guest: 3389, host: (ENV['RDP_WIN11_HOST_PORT'] || 53389).to_i, id: "rdp-win11", auto_correct: true
+    # Enable RDP inside the guest
+    win11.vm.guest = :windows
+    win11.vm.provision "shell",
+      elevated: true,
+      inline: <<-PS
+        $ErrorActionPreference = 'Stop'
+        try {
+          Start-Transcript -Path 'C:\\Windows\\Temp\\vagrant-provision.log' -Append -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server' -Name 'fDenyTSConnections' -Value 0
+          Enable-NetFirewallRule -DisplayGroup 'Remote Desktop' -ErrorAction SilentlyContinue
+          netsh advfirewall firewall set rule group='remote desktop' new enable=Yes | Out-Null
+          Write-Host 'RDP enabled'
+          Stop-Transcript | Out-Null
+          exit 0
+        } catch {
+          Write-Host ('Provisioning warning: ' + $_.Exception.Message)
+          Stop-Transcript | Out-Null
+          exit 0
+        }
+      PS
+  end
+
+
+  # Install flightctl inside the Windows guest
+  #config.vm.provision "shell",
+  #  path: "scripts/install-flightctl.ps1",
+  #  powershell_elevated_interactive: true
+
+  require 'fileutils'
+
+  config.vm.provider :libvirt do |libvirt|
+    libvirt.cpus = 4
+    libvirt.memory = 16384
+    # Configure UEFI firmware (OVMF). Copy VARS template to a writable path.
+    libvirt.machine_type = "q35"
+    loader_candidates = [
+      "/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd",
+      "/usr/share/edk2/ovmf/OVMF_CODE.fd",
+      "/usr/share/edk2/ovmf/x64/OVMF_CODE.fd",
+      "/usr/share/OVMF/OVMF_CODE.fd",
+      "/usr/share/ovmf/OVMF.fd"
+    ]
+    loader_path = loader_candidates.find { |p| File.exist?(p) }
+    libvirt.loader = loader_path if loader_path
+    # Use writable NVRAM under libvirt's directory (prepared by startup.sh)
+    nvram_path = "/var/lib/libvirt/qemu/nvram/win_uefi_vars.fd"
+    libvirt.nvram = nvram_path if File.exist?(nvram_path)
+  end
+end
+

@@ -1,0 +1,18 @@
+FROM quay.io/fedora/fedora-bootc:43
+RUN dnf update -y  
+RUN dnf install -y yum-utils qemu-kvm libvirt-daemon-common libvirt-daemon-driver-network libvirt-daemon-driver-qemu libvirt-daemon-kvm libvirt-daemon-driver-storage-disk libvirt-daemon-driver-storage-logical bridge-utils libvirt-devel kernel-core curl net-tools jq dbus dbus-daemon make gcc edk2-ovmf initscripts openssh-clients sshpass rsync ruby-devel dnsmasq firewalld dmidecode vagrant && \
+  dnf clean all -y
+RUN useradd -ms /bin/bash user && \
+  echo "user:user" | chpasswd && \
+  echo "user ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers &&\
+  usermod -a -G  kvm user &&\
+  usermod -a -G  libvirt user
+RUN dnf remove -y vagrant-libvirt vagrant-vbguest vagrant-winrm vagrant-winrm-elevated
+COPY startup.sh /home/user/startup.sh
+COPY Vagrantfile /home/user/Vagrantfile
+USER user
+WORKDIR /home/user
+# Pre-fetch Vagrant boxes to speed up container startup
+RUN vagrant plugin install vagrant-libvirt winrm winrm-elevated vagrant-vbguest || true
+RUN vagrant box list | grep -q '^oopsme/windows11-22h2' || vagrant box add --provider libvirt --box-version 11-22h2-uefi --clean oopsme/windows11-22h2
+ENTRYPOINT ["/home/user/startup.sh"]

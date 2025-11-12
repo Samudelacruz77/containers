@@ -2,11 +2,15 @@
 set -euo pipefail
 
 OPENSHIFT_HOST="https://console-openshift-console.apps.ocp-edge-cluster-0.qe.lab.redhat.com"
-OPENSHIFT_TOKEN="sha256~YatLrb4e3DT_sBTVha8_-R4D4SoeqvMCbBnueWXH8YY"
+OPENSHIFT_TOKEN="sha256~WR2FkNGtb5fGFp0McOv7IpkWi3tVyJGLX3ODcaIyoFc"
 OPENSHIFT_API="https://api.ocp-edge-cluster-0.qe.lab.redhat.com:6443"
 FLIGHTCTL_API="https://api.flightctl.apps.ocp-edge-cluster-0.qe.lab.redhat.com"
 OCI_REGISTRY=quay.io
-OCI_IMAGE_REPO=${OCI_REGISTRY}/sdelacru/$1
+if [ $# -eq 0 ]; then
+  echo ""
+else
+  OCI_IMAGE_REPO=${OCI_REGISTRY}/sdelacru/$1
+fi
 OCI_IMAGE_TAG=v1
 
 if [ $# -eq 0 ]; then
@@ -110,12 +114,15 @@ echo "Generate flightctl agent config"
 cd $1
 flightctl certificate request --signer=enrollment --expiration=365d --output=embedded > config.yaml
 echo "Create requested image"
-sudo podman build -t ${OCI_IMAGE_REPO}:${OCI_IMAGE_TAG} .
+podman build -t ${OCI_IMAGE_REPO}:${OCI_IMAGE_TAG} .
+podman save -o my-image.tar ${OCI_IMAGE_REPO}:${OCI_IMAGE_TAG}
+sudo podman load -i my-image.tar
+
 mkdir -p output
 
 echo "Create qcow2 image"
 
-mkdir output
+mkdir -p output
 sudo podman run --rm -it --privileged --pull=newer \
     --security-opt label=type:unconfined_t \
     -v "${PWD}/output":/output \

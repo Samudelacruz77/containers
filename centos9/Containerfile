@@ -1,7 +1,7 @@
 FROM quay.io/centos-bootc/centos-bootc:stream9
 ADD etc etc
 
-RUN dnf -y copr enable @redhat-et/flightctl-dev centos-stream-9-x86_64
+RUN dnf -y copr enable @redhat-et/flightctl centos-stream-9-x86_64
 
 RUN dnf -y install flightctl-agent && \
     dnf -y clean all && \
