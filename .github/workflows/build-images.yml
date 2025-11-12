@@ -1,0 +1,47 @@
+name: Build container images
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - name: centos9
+            context: centos9
+            file: centos9/Containerfile
+          - name: rhel96
+            context: rhel96
+            file: rhel96/Containerfile
+          - name: rhel96_fips
+            context: rhel96_fips
+            file: rhel96_fips/Containerfile
+          - name: win
+            context: win
+            file: win/Containerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.image.name }}
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.image.context }}
+          file: ./${{ matrix.image.file }}
+          push: false
+          load: false
+          tags: local/${{ matrix.image.name }}:ci
+
+      - name: Show build result
+        run: echo "Built ${{ matrix.image.name }} successfully"
+
+

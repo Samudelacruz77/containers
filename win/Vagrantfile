@@ -3,7 +3,7 @@
 
 Vagrant.configure("2") do |config|
   # Ensure the vagrant-sshfs plugin is present (Containerfile installs it already)
-  config.vagrant.plugins = ["vagrant-libvirt", "winrm", "winrm-elevated"]
+  config.vagrant.plugins = ["vagrant-libvirt", "winrm", "winrm-elevated", "vagrant-vbguest"]
   # WinRM reliability/tuning
   config.winrm.username = "vagrant"
   config.winrm.password = "vagrant"
@@ -29,8 +29,6 @@ Vagrant.configure("2") do |config|
         "Recent/**",
         "Temp/**"
       ]
-    # RDP: forward host port 53389 -> guest 3389
-    win11.vm.network "forwarded_port", guest: 3389, host: (ENV['RDP_WIN11_HOST_PORT'] || 53389).to_i, id: "rdp-win11", auto_correct: true
     # Enable RDP inside the guest
     win11.vm.guest = :windows
 #    win11.vm.provision "shell",
@@ -63,6 +61,13 @@ Vagrant.configure("2") do |config|
     # Use writable NVRAM under libvirt's directory (prepared by startup.sh)
     nvram_path = "/var/lib/libvirt/qemu/nvram/win_uefi_vars.fd"
     libvirt.nvram = nvram_path if File.exist?(nvram_path)
+    # SPICE graphics configuration (use remote-viewer to connect)
+    libvirt.graphics_type = "spice"
+    libvirt.graphics_autoport = false
+    libvirt.graphics_port = (ENV['SPICE_PORT'] || 5930).to_i
+    libvirt.graphics_ip = ENV.fetch('SPICE_LISTEN', '127.0.0.1')
+    # Video device for SPICE
+    libvirt.video_type = ENV.fetch('VIDEO_TYPE', 'qxl')
   end
 end
 

@@ -26,11 +26,9 @@ sudo podman run --privileged -it --name win11 --replace \
   --cap-add=NET_ADMIN --cap-add=SYS_ADMIN \
   --network=host \
   win-vagrant /bin/bash
-# For prebuilt:
-# quay.io/sdelacru/flightctl-win:v1
 ```
 
-Alternative (bridge networking + published RDP ports) 🌉:
+Prebuilt image:
 
 ```bash
 sudo podman run --privileged -it --name win11 --replace \
@@ -40,8 +38,36 @@ sudo podman run --privileged -it --name win11 --replace \
   -v /dev:/dev \
   --device=/dev/kvm --device=/dev/net/tun --device=/dev/vhost-net \
   --cap-add=NET_ADMIN --cap-add=SYS_ADMIN \
-  --network bridge -p 53389:53389 -p 53390:53390 \
+  --network=host \
+  quay.io/sdelacru/flightctl-win:v1 /bin/bash
+```
+
+Alternative (bridge networking + published SPICE port) 🌉:
+
+```bash
+sudo podman run --privileged -it --name win11 --replace \
+  --cgroupns=host --security-opt seccomp=unconfined \
+  -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+  -v /lib/modules:/lib/modules:ro \
+  -v /dev:/dev \
+  --device=/dev/kvm --device=/dev/net/tun --device=/dev/vhost-net \
+  --cap-add=NET_ADMIN --cap-add=SYS_ADMIN \
+  --network bridge -p 5930:5930 -e SPICE_LISTEN=0.0.0.0 \
   win-vagrant /bin/bash
+```
+
+Prebuilt image:
+
+```bash
+sudo podman run --privileged -it --name win11 --replace \
+  --cgroupns=host --security-opt seccomp=unconfined \
+  -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+  -v /lib/modules:/lib/modules:ro \
+  -v /dev:/dev \
+  --device=/dev/kvm --device=/dev/net/tun --device=/dev/vhost-net \
+  --cap-add=NET_ADMIN --cap-add=SYS_ADMIN \
+  --network bridge -p 5930:5930 -e SPICE_LISTEN=0.0.0.0 \
+  quay.io/sdelacru/flightctl-win:v1 /bin/bash
 ```
 
 ### Inside the container 🧰
@@ -52,14 +78,15 @@ bash /home/user/startup.sh
 
 What it does:
 - 🚌 Starts D-Bus and libvirtd, ensures default libvirt network is active
-- 🔐 Sets iptables for NAT and RDP forwarding
+- 🔐 Configures libvirt default NAT networking; SPICE graphics is enabled
 - 🧪 Boots the Windows 11 Vagrant box under libvirt
-- 🔁 Enables RDP in the guest and sets up rsync of `/home/user` to `C:\Users\Vagrant`
+- 🔁 Sets up rsync of `/home/user` to `C:\Users\Vagrant`
 
-### Connect via RDP 🖥️
+### Connect via SPICE 🖥️
 
-- Windows 11: `localhost:53389`
-- Credentials: usually `vagrant` / `vagrant` (per box defaults)
+- With host networking: `remote-viewer spice://127.0.0.1:5930`
+- With bridge networking: publish `-p 5930:5930` and run container with `-e SPICE_LISTEN=0.0.0.0`, then `remote-viewer spice://127.0.0.1:5930`
+- Tip: Install SPICE guest tools in Windows for better display/clipboard
 
 ### Troubleshooting 🛠️
 
