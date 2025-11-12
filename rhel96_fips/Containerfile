@@ -1,6 +1,7 @@
 FROM registry.redhat.io/rhel9/rhel-bootc:9.6
 
-RUN dnf -y copr enable @redhat-et/flightctl rhel-9-x86_64  && \
+RUN dnf -y install dnf-plugins-core && \
+  dnf -y copr enable @redhat-et/flightctl rhel-9-x86_64  && \
   dnf -y install flightctl-agent flightctl-selinux && \
   dnf -y clean all && \
   systemctl enable flightctl-agent.service && \
