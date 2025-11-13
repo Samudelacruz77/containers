@@ -1,0 +1,47 @@
+name: Check Containerfiles (win, centos9)
+
+on:
+  push:
+    paths:
+      - "win/**"
+      - "centos9/**"
+      - ".github/workflows/check-dockerfiles.yml"
+  pull_request:
+    paths:
+      - "win/**"
+      - "centos9/**"
+      - ".github/workflows/check-dockerfiles.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - name: win
+            context: win
+            file: win/Containerfile
+          - name: centos9
+            context: centos9
+            file: centos9/Containerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.image.name }}
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.image.context }}
+          file: ./${{ matrix.image.file }}
+          push: false
+          load: false
+          tags: local/${{ matrix.image.name }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+

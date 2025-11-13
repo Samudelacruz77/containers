@@ -1,0 +1,56 @@
+name: Open PR on branch pushes
+
+on:
+  push:
+    branches-ignore:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Open PR to default branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branch = context.ref.replace('refs/heads/', '');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const { data: repoInfo } = await github.rest.repos.get({ owner, repo });
+            const base = repoInfo.default_branch || 'main';
+
+            // Skip if branch equals default (handled by separate workflow)
+            if (branch === base) {
+              core.info(`Branch ${branch} is default; skipping.`);
+              return;
+            }
+
+            // Check if an open PR already exists from this branch
+            const existing = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'open', head: `${owner}:${branch}`
+            });
+            if (existing.length > 0) {
+              core.info(`PR already exists for ${branch}: #${existing[0].number}`);
+              return;
+            }
+
+            const title = `Auto PR: ${branch} → ${base}`;
+            const body = [
+              `Automated PR for branch \`${branch}\` into \`${base}\`.`,
+              '',
+              'This was created by the open-pr-on-branch-push workflow.'
+            ].join('\n');
+
+            const { data: pr } = await github.rest.pulls.create({
+              owner, repo, head: branch, base, title, body
+            });
+            core.info(`Created PR #${pr.number} from ${branch} to ${base}`);
+
+

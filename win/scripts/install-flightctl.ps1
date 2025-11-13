@@ -1,6 +1,6 @@
 # Requires administrative privileges
 param(
-    [string]$ZipPath = "$PSScriptRoot\flightctl.zip"
+    [string]$ZipPath = ""
 )
 
 function Assert-Admin {
@@ -9,6 +9,15 @@ function Assert-Admin {
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
         Write-Error "This script must be run as Administrator."
         exit 1
+    }
+}
+
+# Determine script directory - handle both direct execution and Vagrant execution
+if ([string]::IsNullOrWhiteSpace($ZipPath)) {
+    if ($PSScriptRoot) {
+        $ZipPath = Join-Path $PSScriptRoot "flightctl.zip"
+    } else {
+        $ZipPath = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "flightctl.zip"
     }
 }
 
@@ -59,6 +68,8 @@ $candidatePaths = @(
 $resolvedZip = Get-ExistingZipPath -Candidates $candidatePaths
 if (-not $resolvedZip) {
     Write-Error "flightctl.zip not found. Checked: `n$($candidatePaths -join "`n")"
+    Write-Host "Current working directory: $(Get-Location)"
+    Write-Host "Script path: $($MyInvocation.MyCommand.Path)"
     exit 1
 }
 
@@ -74,6 +85,8 @@ Expand-Archive -Path $resolvedZip -DestinationPath $tempDir -Force
 $exe = Get-ChildItem -Path $tempDir -Recurse -File -Include "flightctl*.exe" | Select-Object -First 1
 if (-not $exe) {
     Write-Error "No flightctl executable found in archive. Looked for 'flightctl*.exe'."
+    Write-Host "Archive contents:"
+    Get-ChildItem -Path $tempDir -Recurse | ForEach-Object { Write-Host $_.FullName }
     exit 1
 }
 

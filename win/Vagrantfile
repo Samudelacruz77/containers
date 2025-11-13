@@ -38,9 +38,9 @@ Vagrant.configure("2") do |config|
 
 
   # Install flightctl inside the Windows guest
-  #config.vm.provision "shell",
-  #  path: "scripts/install-flightctl.ps1",
-  #  powershell_elevated_interactive: true
+  # config.vm.provision "shell",
+  #   path: "scripts/install-flightctl.ps1",
+  #   powershell_elevated_interactive: true
 
   require 'fileutils'
 
