@@ -2,6 +2,8 @@
 
 ## Run Windows 11 container (libvirt + Vagrant) 🪟🐧
 
+![Windows container demo](docs/win-demo.gif)
+
 > Disclaimer: This workflow has been tested on Fedora Linux only. It has not been validated on macOS or Windows hosts.
 
 ### Build the image (optional if you pull a prebuilt image) 🏗️
