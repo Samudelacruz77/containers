@@ -9,10 +9,9 @@ RUN dnf -y install flightctl-agent && \
 
 RUN useradd -ms /bin/bash user && \
   echo "user:user" | chpasswd && \
-  echo "user ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && \
-  echo "10.46.46.95 agent-api.flightctl.apps.ocp-edge-cluster-0.qe.lab.redhat.com e2eregistry.apps.ocp-edge-cluster-0.qe.lab.redhat.com" > /etc/hosts
+  echo "user ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 # Add cloud-init and open-vm-tools
-RUN dnf -y install cloud-init open-vm-tools && \
+RUN dnf -y install cloud-init open-vm-tools && \        
   ln -s ../cloud-init.target /usr/lib/systemd/system/default.target.wants && \
   rm -rf /var/{cache,log} /var/lib/{dnf,rhsm} && \
   systemctl enable vmtoolsd.service
@@ -23,9 +22,9 @@ RUN dnf -y install epel-release && \
   dnf -y clean all && \
   systemctl enable podman.service
 
-ADD test-podman-compose-sleep.yaml /usr/local/etc/compose/manifests/embedded-demo-app/podman-compose.yaml
+COPY                                     test-podman-compose-sleep.yaml /usr/local/etc/compose/manifests/embedded-demo-app/podman-compose.yaml
 
-ADD config.yaml /etc/flightctl/
+COPY config.yaml /etc/flightctl/
 
 WORKDIR /
 
