@@ -2,23 +2,44 @@
 # vi: set ft=ruby :
 
 Vagrant.configure("2") do |config|
-  # Ensure the vagrant-sshfs plugin is present (Containerfile installs it already)
-  config.vagrant.plugins = ["vagrant-libvirt", "winrm", "winrm-elevated", "vagrant-vbguest"]
-  # WinRM reliability/tuning
+  config.vagrant.plugins = ["vagrant-libvirt",  "vagrant-reload"]
   config.winrm.username = "vagrant"
   config.winrm.password = "vagrant"
-  config.winrm.transport = :negotiate
+  config.winrm.transport = :plaintext
   config.winrm.basic_auth_only = false
   config.winrm.retry_limit = 30
   config.winrm.retry_delay = 10
   config.winrm.timeout = 600
-  # Disable default synced folder to avoid NFS on Windows guests
+  config.vm.boot_timeout = 600
   config.vm.synced_folder ".", "/vagrant", disabled: true
   config.vm.define "win11", primary: true do |win11|
     win11.vm.box = "oopsme/windows11-22h2"
     win11.vm.box_version = "11-22h2-uefi"
     win11.vm.hostname = "win11"
-    win11.vm.synced_folder "/home/user", "C:\\Users\\vagrant",
+    host_sync_dir = ENV.fetch('HOST_SYNC_DIR', '/home/user')
+    win11.vm.guest = :windows
+    win11.vm.network "private_network",
+      type: "dhcp",
+      libvirt__network_name: "default"
+    win11.vm.provision "shell", privileged: true, inline: <<-SHELL
+      Get-Service Schedule | Select-Object Status, StartType
+      Restart-Service Schedule -ErrorAction SilentlyContinue
+      Start-Sleep -Seconds 5
+      SHELL
+    win11.vm.provision "shell", privileged: true, inline: <<-SHELL
+        $erroractionpreference = "silentlycontinue"
+        add-windowscapability -online -name openssh.server~~~~0.0.10.0
+        start-service sshd
+        set-service -name sshd -startuptype automatic
+        new-netfirewallrule -name "openssh-server-in-tcp" -displayname "openssh ssh server (inbound)" -enabled true -direction inbound -protocol tcp -action allow -localport 22
+        if (-not (get-command choco.exe -erroraction silentlycontinue)) {
+            set-executionpolicy bypass -scope process -Force
+            [system.net.servicepointmanager]::securityprotocol = [system.net.securityprotocoltype]::tls12
+            iex ((new-object system.net.webclient).downloadstring("https://community.chocolatey.org/install.ps1"))
+        }
+        choco install -y rsync
+      SHELL
+    win11.vm.synced_folder host_sync_dir, "C:\\Users\\Vagrant",
       type: "rsync",
       rsync__exclude: [
         "AppData/**",
@@ -29,25 +50,193 @@ Vagrant.configure("2") do |config|
         "Recent/**",
         "Temp/**"
       ]
-    # Enable RDP inside the guest
+    win11.vm.provision "shell", privileged: true, inline: <<-SHELL
+        $ErrorActionPreference = 'Continue'
+        Write-Host "Testing internet connectivity..."
+        $testHosts = @('8.8.8.8', 'www.spice-space.org')
+        $allSuccess = $true
+        foreach ($testHost in $testHosts) {
+          try {
+            $result = Test-Connection -ComputerName $testHost -Count 2 -Quiet -ErrorAction SilentlyContinue
+            if ($result) {
+              Write-Host "Successfully connected to $testHost"
+            } else {
+              Write-Host "Failed to connect to $testHost"
+              $allSuccess = $false
+            }
+          } catch {
+            Write-Host "Error testing connection to ${testHost}: $_"
+            $allSuccess = $false
+          }
+        }
+        if (-not $allSuccess) {
+          Write-Warning "Internet connectivity check failed, but continuing..."
+        } else {
+          Write-Host "Internet connectivity verified successfully"
+        }
+      SHELL
+    win11.vm.provision "shell", privileged: true, inline: <<-SHELL
+         $ErrorActionPreference = 'Stop'
+         $log = 'C:\\Windows\\Temp\\spice-install-vagrant.log'
+         try { Start-Transcript -Path $log -Append } catch { Write-Host "Could not start transcript: $_" }
+         Write-Host "[$(Get-Date -Format o)] Starting SPICE Guest Tools installation"
+
+         $localInstaller = 'C:\\Users\\vagrant\\binary\\spice-guest-tools-latest.exe'
+         $tempInstaller = 'C:\\Windows\\Temp\\spice-guest-tools-latest.exe'
+         $installer = $null
+
+         # Check if installer exists in synced binary folder first
+         if (Test-Path -Path $localInstaller) {
+           Write-Host "[$(Get-Date -Format o)] Using local SPICE Guest Tools installer from binary folder"
+           $installer = $localInstaller
+         } else {
+           Write-Host "[$(Get-Date -Format o)] Local installer not found. Downloading SPICE Guest Tools..."
+           $url = 'https://www.spice-space.org/download/windows/spice-guest-tools/spice-guest-tools-latest.exe'
+           Write-Host "[$(Get-Date -Format o)] Downloading from $url..."
+           try {
+             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+             Invoke-WebRequest -Uri $url -OutFile $tempInstaller -UseBasicParsing -TimeoutSec 300
+             Write-Host "[$(Get-Date -Format o)] Download completed: $tempInstaller"
+             $installer = $tempInstaller
+           } catch {
+             Write-Host "[$(Get-Date -Format o)] Failed to download SPICE Guest Tools: $_"
+             try { Stop-Transcript } catch {}
+             throw "Cannot proceed without SPICE Guest Tools installer"
+           }
+         }
+
+         if (-not (Test-Path -Path $installer)) {
+           Write-Host "[$(Get-Date -Format o)] ERROR: Installer not found at $installer"
+           try { Stop-Transcript } catch {}
+           throw "Installer not found at $installer"
+         }
+
+         $silentArgs = @(
+           '/S',
+           '/VERYSILENT',
+           '/SUPPRESSMSGBOXES',
+           '/NORESTART',
+           '/SP-'
+         )
+
+         Write-Host "[$(Get-Date -Format o)] Installing SPICE Guest Tools from $installer..."
+         Write-Host "[$(Get-Date -Format o)] Arguments: $($silentArgs -join ' ')"
+         try {
+           $p = Start-Process -FilePath $installer -ArgumentList $silentArgs -Wait -PassThru -NoNewWindow
+           Write-Host "[$(Get-Date -Format o)] Installer process completed with exit code: $($p.ExitCode)"
+           if ($p.ExitCode -ne 0) {
+             Write-Host "[$(Get-Date -Format o)] SPICE Guest Tools installer exited with code $($p.ExitCode)"
+             try { Stop-Transcript } catch {}
+             throw "Installation failed with exit code $($p.ExitCode)"
+           }
+           Write-Host "[$(Get-Date -Format o)] SPICE Guest Tools installation completed successfully"
+         } catch {
+           Write-Host "[$(Get-Date -Format o)] Installation error: $_"
+           try { Stop-Transcript } catch {}
+           throw
+         } finally {
+           # Clean up temp installer if we downloaded it
+           if ($installer -eq $tempInstaller) {
+             Remove-Item -Path $tempInstaller -Force -ErrorAction SilentlyContinue
+             Write-Host "[$(Get-Date -Format o)] Cleaned up temporary installer"
+           }
+         }
+
+         Write-Host "[$(Get-Date -Format o)] Log saved to: $log"
+         try { Stop-Transcript } catch {}
+       SHELL
+    # Reload VM to activate SPICE Guest Tools drivers
+    win11.vm.provision :reload
+    # Download flightctl zip, install to C:\flightctl\flightctl.exe, and add to PATH
+     win11.vm.provision "shell", privileged: true, inline: <<-SHELL
+       $ErrorActionPreference = 'Stop'
+       $log = 'C:\\Windows\\Temp\\flightctl-install-inline.log'
+       try { Start-Transcript -Path $log -Append } catch { Write-Host "Could not start transcript: $_" }
+       Write-Host "[$(Get-Date -Format o)] Starting flightctl installation (inline)"
+       [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+       $url = 'https://github.com/flightctl/flightctl/releases/download/v0.10.0/flightctl-windows-amd64.zip'
+       $tempZip = Join-Path $env:TEMP 'flightctl-windows-amd64.zip'
+       $extractDir = Join-Path $env:TEMP 'flightctl_extracted'
+       $destDir = 'C:\\flightctl'
+       Write-Host "[$(Get-Date -Format o)] Creating install directory: $destDir"
+       New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+       Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $extractDir
+       Write-Host "[$(Get-Date -Format o)] Downloading flightctl from: $url"
+       Invoke-WebRequest -Uri $url -OutFile $tempZip -UseBasicParsing
+       Write-Host "[$(Get-Date -Format o)] Extracting archive to: $extractDir"
+       Expand-Archive -Path $tempZip -DestinationPath $extractDir -Force
+       $exe = Get-ChildItem -Path $extractDir -Filter 'flightctl*.exe' -Recurse | Select-Object -First 1
+       if (-not $exe) {
+         Write-Host "[$(Get-Date -Format o)] ERROR: flightctl executable not found in zip"
+         try { Stop-Transcript } catch {}
+         throw 'flightctl executable not found in zip'
+       }
+       Write-Host "[$(Get-Date -Format o)] Copying executable to: $destDir\flightctl.exe"
+       Copy-Item $exe.FullName (Join-Path $destDir 'flightctl.exe') -Force
+       $machinePath = [Environment]::GetEnvironmentVariable('Path','Machine')
+       if (-not ($machinePath -split ';' | Where-Object { $_ -ieq $destDir })) {
+         Write-Host "[$(Get-Date -Format o)] Adding $destDir to system PATH"
+         [Environment]::SetEnvironmentVariable('Path', ($machinePath.TrimEnd(';') + ';' + $destDir), 'Machine')
+       }
+       if (-not ($env:Path -split ';' | Where-Object { $_ -ieq $destDir })) {
+         $env:Path += ';' + $destDir
+       }
+       Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
+       Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $extractDir
+       Write-Host "[$(Get-Date -Format o)] flightctl installation completed. Log: $log"
+       try { Stop-Transcript } catch {}
+       SHELL
     win11.vm.guest = :windows
-#    win11.vm.provision "shell",
-#     path: "scripts/enable-rdp.ps1",
-#     powershell_elevated_interactive: true
+    # Login to flightctl service
+    win11.vm.provision "shell",
+       privileged: true,
+       inline: <<-SHELL
+         $ErrorActionPreference = 'Continue'
+         $env:FLIGHTCTL_ENDPOINT = "#{ENV['FLIGHTCTL_ENDPOINT'] || 'https://api.192.168.1.21.nip.io:3443'}"
+         $env:FLIGHTCTL_INSECURE = "#{ENV['FLIGHTCTL_INSECURE'] || 'true'}"
+         $env:FLIGHTCTL_NO_AUTH = "#{ENV['FLIGHTCTL_NO_AUTH'] || 'true'}"
+         $env:FLIGHTCTL_USE_TOKEN = "#{ENV['FLIGHTCTL_USE_TOKEN'] || ''}"
+         $env:FLIGHTCTL_TOKEN = "#{ENV['FLIGHTCTL_TOKEN'] || ''}"
+         $env:FLIGHTCTL_USERNAME = "#{ENV['FLIGHTCTL_USERNAME'] || ''}"
+         $env:FLIGHTCTL_PASSWORD = "#{ENV['FLIGHTCTL_PASSWORD'] || ''}"
+
+         Write-Host "[$(Get-Date -Format o)] Checking connectivity to flightctl endpoint: $env:FLIGHTCTL_ENDPOINT"
+
+         # Parse URL to extract host and port
+         try {
+           $uri = [System.Uri]$env:FLIGHTCTL_ENDPOINT
+           $host = $uri.Host
+           $port = $uri.Port
+
+           Write-Host "[$(Get-Date -Format o)] Testing connection to $host`:$port..."
+
+           # Test connectivity using Test-NetConnection (works on Windows Server 2012 R2+)
+           $testResult = Test-NetConnection -ComputerName $host -Port $port -InformationLevel Quiet -WarningAction SilentlyContinue -ErrorAction SilentlyContinue
+
+           if ($testResult) {
+             Write-Host "[$(Get-Date -Format o)] Successfully connected to $host`:$port"
+             Write-Host "[$(Get-Date -Format o)] Proceeding with flightctl login..."
+             C:\\Users\\Vagrant\\scripts\\flightctl-login.ps1
+           } else {
+             Write-Warning "[$(Get-Date -Format o)] Cannot reach $host`:$port - flightctl endpoint is not available"
+             Write-Warning "[$(Get-Date -Format o)] Skipping flightctl login. Please verify:"
+             Write-Warning "  1. The endpoint URL is correct: $env:FLIGHTCTL_ENDPOINT"
+             Write-Warning "  2. The flightctl service is running"
+             Write-Warning "  3. Network connectivity from the Windows VM to the endpoint"
+             Write-Host "[$(Get-Date -Format o)] You can manually login later using: C:\\Users\\Vagrant\\scripts\\flightctl-login.ps1"
+           }
+         } catch {
+           Write-Warning "[$(Get-Date -Format o)] Error checking connectivity: $_"
+           Write-Warning "[$(Get-Date -Format o)] Skipping flightctl login"
+         }
+       SHELL
   end
-
-
-  # Install flightctl inside the Windows guest
-  # config.vm.provision "shell",
-  #   path: "scripts/install-flightctl.ps1",
-  #   powershell_elevated_interactive: true
 
   require 'fileutils'
 
   config.vm.provider :libvirt do |libvirt|
-    libvirt.cpus = 4
-    libvirt.memory = 16384
-    # Configure UEFI firmware (OVMF). Copy VARS template to a writable path.
+    libvirt.cpus = 2
+    libvirt.memory = 4096
     libvirt.machine_type = "q35"
     loader_candidates = [
       "/usr/share/edk2/ovmf/OVMF_CODE.secboot.fd",
@@ -61,12 +250,10 @@ Vagrant.configure("2") do |config|
     # Use writable NVRAM under libvirt's directory (prepared by startup.sh)
     nvram_path = "/var/lib/libvirt/qemu/nvram/win_uefi_vars.fd"
     libvirt.nvram = nvram_path if File.exist?(nvram_path)
-    # SPICE graphics configuration (use remote-viewer to connect)
     libvirt.graphics_type = "spice"
     libvirt.graphics_autoport = false
     libvirt.graphics_port = (ENV['SPICE_PORT'] || 5930).to_i
     libvirt.graphics_ip = ENV.fetch('SPICE_LISTEN', '127.0.0.1')
-    # Video device for SPICE
     libvirt.video_type = ENV.fetch('VIDEO_TYPE', 'qxl')
   end
 end
