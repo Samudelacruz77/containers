@@ -35,8 +35,11 @@ cd win
 # Optional: override what gets synced to C:\Users\Vagrant
 export HOST_SYNC_DIR="${PWD}"   # defaults to /home/user if unset
 
+# Optional: Add custom hosts entry to Windows hosts file
+export HOSTS_ENTRY="10.46.46.95 console-openshift-console.apps.ocp-edge-cluster-0.qe.lab.redhat.com  api.ocp-edge-cluster-0.qe.lab.redhat.com oauth-openshift.apps.ocp-edge-cluster-0.qe.lab.redhat.com search-api-rhacm.apps.ocp-edge-cluster-0.qe.lab.redhat.com api.apps.ocp-edge-cluster-0.qe.lab.redhat.com api.flightctl.apps.ocp-edge-cluster-0.qe.lab.redhat.com"
+
 # Optional: Configure flightctl login (requires login provisioner to be uncommented)
-export FLIGHTCTL_ENDPOINT="https://api.192.168.1.21.nip.io:3443"
+export FLIGHTCTL_ENDPOINT="https://api.ocp-edge-cluster-0.qe.lab.redhat.com"
 export FLIGHTCTL_INSECURE="true"
 export FLIGHTCTL_NO_AUTH="true"
 
@@ -50,8 +53,11 @@ Or run via the helper script (automates plugins, base box, and post-setup):
 cd win
 export HOST_SYNC_DIR="${PWD}"   # optional; defaults to /home/user
 
+# Optional: Add custom hosts entry to Windows hosts file
+export HOSTS_ENTRY="10.46.46.95 console-openshift-console.apps.ocp-edge-cluster-0.qe.lab.redhat.com  api.ocp-edge-cluster-0.qe.lab.redhat.com oauth-openshift.apps.ocp-edge-cluster-0.qe.lab.redhat.com search-api-rhacm.apps.ocp-edge-cluster-0.qe.lab.redhat.com api.apps.ocp-edge-cluster-0.qe.lab.redhat.com api.flightctl.apps.ocp-edge-cluster-0.qe.lab.redhat.com"
+
 # Optional: Configure flightctl login (requires login provisioner to be uncommented)
-export FLIGHTCTL_ENDPOINT="https://api.192.168.1.21.nip.io:3443"
+export FLIGHTCTL_ENDPOINT="https://api.ocp-edge-cluster-0.qe.lab.redhat.com"
 export FLIGHTCTL_INSECURE="true"
 export FLIGHTCTL_NO_AUTH="true"
 
@@ -63,14 +69,15 @@ What happens:
 - Boots the Windows 11 Vagrant box under libvirt (UEFI, SPICE graphics).
 - Syncs `HOST_SYNC_DIR` into `C:\Users\Vagrant` (rsync).
 - Runs provisioning scripts:
-  1. Restarts the Windows Task Scheduler service
-  2. Installs OpenSSH server and Chocolatey package manager
-  3. Installs rsync for file syncing
-  4. Tests internet connectivity to 8.8.8.8 and <www.spice-space.org>
-  5. Downloads and installs SPICE Guest Tools (or uses local binary from `win/binary/spice-guest-tools-latest.exe` if available)
-  6. **Reboots the VM** to activate SPICE Guest Tools drivers
-  7. Installs flightctl client (if provisioner is uncommented in Vagrantfile)
-  8. Checks connectivity to flightctl endpoint and logs in if available (enabled by default, gracefully skips if endpoint is unreachable)
+  1. Adds custom hosts entry to Windows hosts file (if `HOSTS_ENTRY` is set)
+  2. Restarts the Windows Task Scheduler service
+  3. Installs OpenSSH server and Chocolatey package manager
+  4. Installs rsync for file syncing
+  5. Tests internet connectivity to 8.8.8.8 and <www.spice-space.org>
+  6. Downloads and installs SPICE Guest Tools (or uses local binary from `win/binary/spice-guest-tools-latest.exe` if available)
+  7. **Reboots the VM** to activate SPICE Guest Tools drivers
+  8. Installs flightctl client (if provisioner is uncommented in Vagrantfile)
+  9. Checks connectivity to flightctl endpoint and logs in if available (enabled by default, gracefully skips if endpoint is unreachable)
 
 All installation steps are logged with timestamps to `C:\Windows\Temp\` for troubleshooting:
 
@@ -86,9 +93,10 @@ The following environment variables can be set on the host before running `vagra
 
 **General:**
 - `HOST_SYNC_DIR` - Directory to sync to `C:\Users\Vagrant` in the guest (default: `/home/user`)
+- `HOSTS_ENTRY` - Custom hosts file entry to add to Windows `C:\Windows\System32\drivers\etc\hosts` (optional, format: `"IP hostname"`, e.g., `"192.168.1.21 api.example.com"`)
 
 **flightctl Configuration** (used by login provisioner in Vagrantfile lines 190-232):
-- `FLIGHTCTL_ENDPOINT` - flightctl service URL (default: `https://api.192.168.1.21.nip.io:3443`)
+- `FLIGHTCTL_ENDPOINT` - flightctl service URL (default: `https://api.ocp-edge-cluster-0.qe.lab.redhat.com`)
 - `FLIGHTCTL_INSECURE` - Skip TLS verification: `true` or `1` (default: `true`)
 - `FLIGHTCTL_NO_AUTH` - Disable authentication for local deployments: `true` or `1` (default: `true`)
 - `FLIGHTCTL_USE_TOKEN` - Use token authentication: `true` or `1` (default: empty)
@@ -166,7 +174,7 @@ The `win/scripts/` directory contains PowerShell scripts for automated software 
   - Example usage:
     ```powershell
     # Local deployment (no auth, insecure) - using environment variables
-    $env:FLIGHTCTL_ENDPOINT = "https://api.192.168.1.21.nip.io:3443"
+    $env:FLIGHTCTL_ENDPOINT = "https://api.ocp-edge-cluster-0.qe.lab.redhat.com"
     $env:FLIGHTCTL_NO_AUTH = "true"
     $env:FLIGHTCTL_INSECURE = "true"
     .\scripts\flightctl-login.ps1
